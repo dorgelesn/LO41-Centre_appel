@@ -25,7 +25,7 @@ LDFLAGS= $(LIBRARY_PATH) -o
 LIBS=  
 
 # Les fichiers sources de l'application
-MAIN = main.c
+MAIN = main.c fonctions.c
 GROUPES = groupes.c
 PILOTES = pilotes.c
 
@@ -55,7 +55,7 @@ clean:
 # LES REGLES DE DEPENDANCE. Certaines sont implicites mais je recommande d'en 
 # mettre une par fichier source. 
 #-----------------------------------------------------------------------------
-main.o: structures.h
+main.o: structures.h fonctions.h
 groupes.o: structures.h
 pilotes.o: structures.h
 
