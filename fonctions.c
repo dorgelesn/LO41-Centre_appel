@@ -4,6 +4,9 @@
 #include "fonctions.h"
 #include "structures.h"
 
+/*Limite du nombre de file crée par processus */
+#define limteFile 128
+
 /* Fonctions qui va supprimer les 'limites' premières files d'attente */
 int cleanQueue(int* file, int limite){
 
@@ -11,7 +14,7 @@ int cleanQueue(int* file, int limite){
 
 	for(int i = 0; i < limite ; ++i){
         if(msgctl(file[i], IPC_RMID, NULL) == -1){
-            fprintf(stderr,"Erreur Suppresion de la file de messages %d\n",i);
+            fprintf(stderr,"Erreur suppresion de la file de messages %d\n",i);
             success = false;
         }
     }
@@ -24,40 +27,106 @@ int cleanQueue(int* file, int limite){
 }
 
 /* Focntions qui permet de créer autant de files de file de messages souhaitées */
-int createQueue(int* FilesAttentes, int nombre){
+int createQueue(int* filesAttente, int nombre){
 
-	int MemoirePid, MemoireFile;
-	pid_t pidValue;
+    for(int i = 0; i < nombre; ++i){
+    
+        filesAttente[i] = msgget(ftok("main.c", i), IPC_CREAT | IPC_EXCL | 0600);
+        if(filesAttente[i] == -1){
+            fprintf(stderr, "[Erreur création file d'attente %d]\n", i);
+            cleanQueue(filesAttente,i);
+            return -1;        
+        }
+    } 
 
-	MemoirePid = shmget(ftok("fonctions.c",1), TAILLE_SHM, 0644 | IPC_CREAT);
-	MemoireFile = shmget(ftok("fonctions.c",2), sizeof(int), 0644 | IPC_CREAT);
+    return 0;
+}
 
-	if(MemoireFile == -1)
-		perror("Erreur attachement memoirefile");	
+/* On assigne les agents à des groupes */
+int assignationAgents(int** tableau, int nbrAgents, int NbrFiles){
 
-	pidValue = shmat(MemoirePid, NULL, 0);
-	pidValue = getpid();
+	for(int agent = 0; agent < nbrAgents; ++agent){
 
-	FilesAttentes = shmat(MemoireFile, NULL, 0);
+		if(agent <= NbrFiles){
 
-	for(int i = 0; i < nombre; ++i){
-		if(fork() == 0){
-			if(getppid() == pidValue){
-				//Action
-			}
-			exit(0);
+			tableau[agent][0] = agent;
 
+			do{
+
+				tableau[agent][1] = rand()%(NbrFiles);
+
+			}while(tableau[agent][0] == tableau[agent][1]);
+		
 		}
 		else{
-			wait(NULL);
-		}
 
-		wait(NULL);
+			tableau[agent][0] = rand()%(NbrFiles);
+
+			do{
+
+				tableau[agent][1] = rand()%(NbrFiles);
+
+			}while(tableau[agent][0] == tableau[agent][1]);
+
+		}
 
 	}
 
-	/* On supprime la memoire partagee */
-	shmctl(MemoirePid, IPC_RMID, NULL);
+	return 0;
+
+
+
+}
+
+/* On repertorie les agents disponibles pour un groupe */
+int assignationGroupe(int numeroGroupe, int** asssignationAgent, int nbrAgent, int* groupe){
+
+	//groupe = calloc(0,sizeof(int));
+	int nbrGroupe = 0;
+
+	for(int agent = 0 ; agent < nbrAgent; ++agent){
+
+
+		if(asssignationAgent[agent][0] == numeroGroupe){
+			nbrGroupe++;
+			groupe = realloc(groupe,(nbrGroupe) * sizeof(int));
+			groupe[nbrGroupe - 1] = agent;
+		}
+	}
+
+	if(nbrGroupe == 0){
+		groupe = NULL;
+	}
+
+	return nbrGroupe;
+}
+
+/* On repertorie les agents de debordement pour un groupe */
+int assignationGroupeDebordement(int numeroGroupe, int** asssignationAgent, int nbrAgent, int* groupeDebordement){
+
+	//groupeDebordement = calloc(0,sizeof(int));
+	int nbrGroupe = 0;
+
+	for(int agent = 0 ; agent < nbrAgent; ++agent){
+		if(asssignationAgent[agent][1] == numeroGroupe){
+			nbrGroupe++;
+			groupeDebordement = realloc(groupeDebordement, (nbrGroupe) * sizeof(int));
+			groupeDebordement[nbrGroupe - 1] = agent;
+		}
+	}
+
+	if(nbrGroupe == 0){
+		groupeDebordement = NULL;
+	}
+
+	return nbrGroupe;
+}
+
+int inialisationEtat(int* tableau, int NbrAgents){
+	for(int i = 0; i < NbrAgents; i++){
+		tableau[i] = DISPONIBLE;
+	}
+
 	return 1;
 }
 

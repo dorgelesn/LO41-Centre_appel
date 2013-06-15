@@ -13,7 +13,7 @@ CXX= gcc
 INCLUDE= -I/usr/include
 
 # Options de compilation.
-CXXFLAGS=  $(INCLUDE) -c -std=gnu99 
+CXXFLAGS=  $(INCLUDE) -c -g -std=gnu99 
 
 # Les chemins ou se trouvent les librairies
 LIBRARY_PATH= -L/usr/lib -lpthread
@@ -26,7 +26,7 @@ LIBS=
 
 # Les fichiers sources de l'application
 MAIN = main.c fonctions.c
-GROUPES = groupes.c
+GROUPES = groupes.c fonctions.c
 PILOTES = pilotes.c
 
 #-----------
@@ -56,7 +56,7 @@ clean:
 # mettre une par fichier source. 
 #-----------------------------------------------------------------------------
 main.o: structures.h fonctions.h
-groupes.o: structures.h
+groupes.o: structures.h fonctions.h
 pilotes.o: structures.h
 
 #---------------------------------

@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -13,6 +12,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 #include "structures.h"
 #include "fonctions.h"
@@ -27,59 +27,38 @@ int *FilesAttentes;
 int MemoirePartagee; 
 
 /* PID des 2 processus fils */
-pid_t pidPilotes;
-pid_t pidGroupes;
-
 pid_fils* pid;
-
-/* Thread qui crée les files de messages */            
-void *fonc_create_queue(void *k){
-
-    for(int i = 0; i < NBR_PILOTES; ++i){
-    
-        FilesAttentes[i] = msgget(ftok("main.c", i), IPC_CREAT | IPC_EXCL | 0600);
-        if(FilesAttentes[i] == -1){
-            fprintf(stderr, "[Erreur création file d'attente %d]\n", i);
-            cleanQueue(FilesAttentes,i);
-            exit(1);
-        }
-    } 
-
-}
 
 /* On tue les processus fils pour finir le programme (et ainsi nettoyer les IPC) */
 void SignalArret(int num){
 
-    //fflush(NULL);
-    //printf("Arret Programme");
-
-    /*FILE* fichier = fopen("test","a");
-    fputs("Arret programme",fichier);
-    fclose(fichier);*/
-
-
     kill(pid->pidPilotes, SIGINT);
     kill(pid->pidGroupes, SIGINT);
 
-    //fflush(NULL);
-    //printf("Attente Fn processus");
-
-    waitpid(pid->pidPilotes,NULL,0);
-    waitpid(pid->pidGroupes,NULL,0);
-
-    /* On supprime les files d'attentes */
-    cleanQueue(FilesAttentes,NBR_PILOTES);
+    //waitpid(pid->pidPilotes,NULL,0);
+    //waitpid(pid->pidGroupes,NULL,0);
 
     /* On detache la memoire partage */
-    if(shmctl(MemoirePartagee, IPC_RMID, NULL) == -1)
-        perror("Erreur lors du detachement de la memoire partagee\n");
+    /*if(shmctl(MemoirePartagee, IPC_RMID, NULL) == -1)
+        perror("Erreur lors du detachement de la memoire partagee\n");*/
+
+    /* On supprime les files d'attentes */
+    //cleanQueue(FilesAttentes,NBR_PILOTES);
 
     /* On libere la memoire */
-    free(FilesAttentes);
-    free(pid);
+    /*if(FilesAttentes != NULL){
+        free(FilesAttentes);
+        FilesAttentes = NULL;
+    }*/
 
-    signal(SIGINT, SIG_DFL);
-    raise(SIGINT);
+    /*if(pid != NULL){
+        free(pid);
+        pid = NULL;
+    }*/
+
+
+    //signal(SIGINT, SIG_DFL);
+   // raise(SIGINT);
 
     //printf("test\n");
 }
@@ -89,24 +68,26 @@ void SignalArret(int num){
     nombre d'agents souhaités */
 int main(int argc, char* argv[]){
 
-    printf("%d\n",createQueue(5, 10));
+    //printf("%d\n",createQueue(5, 10));
 
     struct sigaction action;
 
     if(argc == 1){
-
         NBR_PILOTES = NBR_DEFAULT;
+        NBR_AGENTS = NBR_PILOTES;
     }
-    else if(argc == 2){
+    else if(argc == 2 && atoi(argv[1]) > 1){
         NBR_PILOTES = atoi(argv[1]);
+        NBR_AGENTS = NBR_PILOTES;
     }
-    else if(argc == 3){
+    else if(argc == 3 && atoi(argv[1]) > 1 && atoi(argv[2]) > 1 && atoi(argv[1]) <= atoi(argv[2])){
         NBR_PILOTES = atoi(argv[1]);
         NBR_AGENTS = atoi(argv[2]);
 
 
     }
     else{
+        printf("Utilisation : \nArgument 1 (optionnel) : Nombre de pilote ( > 1 )\nArgument 2 (optionnel) : Nombre d'agents ( > 1 )\n");
         fprintf(stderr, "Impossible de lancer le main\n");
         return EXIT_FAILURE;
     }
@@ -123,8 +104,10 @@ int main(int argc, char* argv[]){
     /* On partage la file d'attente */
     pid = shmat(MemoirePID, NULL, 0);
     
-    FilesAttentes = malloc(NBR_PILOTES * sizeof(int)); 
-    pthread_t createQueue; 
+    FilesAttentes = malloc(NBR_PILOTES * sizeof(int));
+    if(FilesAttentes == NULL){
+        perror("Echec lors l'allocation memoire file d'attente");
+    } 
 
     /* Tubes pour recuperer le PID des execl */
     int pilotesTube[2];
@@ -133,6 +116,7 @@ int main(int argc, char* argv[]){
     /* Variables pour les parametres de l'execl */
     char Memoire[255];
     char NbrPilotes[255];
+    char NbrAgents[255];
     char TPilote[255];
     char TGroupe[255];
 
@@ -162,10 +146,6 @@ int main(int argc, char* argv[]){
        perror("shmat");
        exit(1);
     }
-  
-    /* Création des files d'attente */
-    if(pthread_create(&createQueue, NULL, fonc_create_queue,NULL) == -1)
-        perror("Erreur creation files d'attentes");
     
 
     /* On formate le nombre de pilotes et la memoire partage dans un char* */
@@ -173,8 +153,12 @@ int main(int argc, char* argv[]){
     sprintf(NbrPilotes,"%d",NBR_PILOTES);
     sprintf(TGroupe,"%d",groupesTube[1]);
     sprintf(TPilote,"%d",pilotesTube[1]);
+    sprintf(NbrAgents,"%d",NBR_AGENTS);
 
-    pthread_join(createQueue,NULL);
+    if (createQueue(FilesAttentes, NBR_PILOTES) == -1){
+        perror("Errer creation");
+    }
+
 
     /*On fork */
     switch(fork()){
@@ -199,11 +183,13 @@ int main(int argc, char* argv[]){
                     /* On lance les groupes et on envoie en parametre :
                         le nombre de file d'attente
                         le segment de memoire partagee 
-                        le tube pour envoyer le pid*/
-                    if (execl("./groupes","groupes", NbrPilotes, Memoire, TGroupe, NULL) == -1){
+                        le tube pour envoyer le pid
+                        le nombre d'agents souhaités */
+                    if (execl("./groupes","groupes", NbrPilotes, Memoire, TGroupe, NbrAgents, NULL) == -1){
                         perror("L'ouverture des groupes a échoué");
                         exit(1); 
                     }
+                    printf("Recouvrement groupe\n");
 
                     break;
                 }
@@ -212,7 +198,7 @@ int main(int argc, char* argv[]){
                     /* On reucpere le pid du fils */
                     close(groupesTube[1]);
                     //read(groupesTube[0], &pidGroupes, sizeof(pidGroupes));
-                    read(groupesTube[0], &(pid->pidGroupes), sizeof(pid->pidGroupes));
+                    read(groupesTube[0], &(pid->pidGroupes), sizeof(pid_t));
                     close(groupesTube[0]);
 
                     break;
@@ -247,6 +233,7 @@ int main(int argc, char* argv[]){
                         perror("L'ouverture des pilotes a échoué");
                         exit(1);    
                     }
+                    printf("Recouvrement pilote\n");
 
                     break;    
         
@@ -257,10 +244,8 @@ int main(int argc, char* argv[]){
                     /* On recupere le pid du fils */
                     close(pilotesTube[1]);
                     //read(pilotesTube[0], &pidPilotes, sizeof(pidPilotes));
-                    read(pilotesTube[0], &(pid->pidPilotes), sizeof(pid->pidPilotes));
-                    close(pilotesTube[0]);
-
-                    
+                    read(pilotesTube[0], &(pid->pidPilotes), sizeof(pid_t));
+                    close(pilotesTube[0]);               
 
                     break;
 
@@ -276,15 +261,49 @@ int main(int argc, char* argv[]){
     sigemptyset(&action.sa_mask);
     sigaction(SIGINT,&action,NULL);
 
+    waitpid(pid->pidPilotes,NULL,0);
+    waitpid(pid->pidGroupes,NULL,0);
+
+    printf("PID pilotes %d et groupes %d\n", pid->pidPilotes, pid->pidGroupes);
+
     /* On a recuperé les PID, plus besoin de la memoire partagée */
     shmctl(MemoirePID, IPC_RMID, NULL);
 
+    /* On detache la memoire partage */
+    if(shmctl(MemoirePartagee, IPC_RMID, NULL) == -1)
+        perror("Erreur lors du detachement de la memoire partagee\n");
+
+    cleanQueue(FilesAttentes,NBR_PILOTES);
+
+    printf("Fin du processus centre d'appel\n");
+
+        /* On libere la memoire */
+    /*if(FilesAttentes != NULL){
+        free(FilesAttentes);
+        FilesAttentes = NULL;
+    }*/
+
+    /*if(pid != NULL){
+        free(pid);
+        pid = NULL;
+    }*/
+
+    /* On libere la memoire */
+    /*if(FilesAttentes != NULL){
+        free(FilesAttentes);
+        FilesAttentes = NULL;
+    }*/
+
+    /*if(pid != NULL){
+        free(pid);
+        pid = NULL;
+    }*/
+
     /* On attend qu'il n'y ait plus de fils */
-    wait(NULL);
 
     /* Au cas ou */
-    cleanQueue(FilesAttentes,NBR_PILOTES);
-    printf("Fermeture du centre d'appel");
+    //raise(SIGINT);
+    //printf("Fermeture du centre d'appel\n");
 
     return EXIT_SUCCESS;
 }

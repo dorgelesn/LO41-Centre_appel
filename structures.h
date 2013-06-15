@@ -21,3 +21,9 @@ typedef struct {
 	pid_t pidPilotes;
 	pid_t pidGroupes;
 }pid_fils;
+
+typedef struct 
+{
+	pid_t pere;
+	int nbrProcessus;
+}forkn;
