@@ -1,3 +1,22 @@
+/*  File : fonctions.c
+    Authors :   Thomas Gagneret <thomas.gagneret@utbm.fr>
+                William kengne Teukam <william.kengne-teukam@utbm.fr>
+
+    This file is part of Centre d'appel.
+
+    Centre d'appel is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Centre d'appel is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Centre d'appel.  If not, see <http://www.gnu.org/licenses/> */
+
 #ifndef FONCTIONS
 #define FONCTIONS
 
@@ -81,11 +100,9 @@ int assignationAgents(int** tableau, int nbrAgents, int NbrFiles){
 /* On repertorie les agents disponibles pour un groupe */
 int assignationGroupe(int numeroGroupe, int** asssignationAgent, int nbrAgent, int* groupe){
 
-	//groupe = calloc(0,sizeof(int));
 	int nbrGroupe = 0;
 
 	for(int agent = 0 ; agent < nbrAgent; ++agent){
-
 
 		if(asssignationAgent[agent][0] == numeroGroupe){
 			nbrGroupe++;
@@ -104,7 +121,6 @@ int assignationGroupe(int numeroGroupe, int** asssignationAgent, int nbrAgent, i
 /* On repertorie les agents de debordement pour un groupe */
 int assignationGroupeDebordement(int numeroGroupe, int** asssignationAgent, int nbrAgent, int* groupeDebordement){
 
-	//groupeDebordement = calloc(0,sizeof(int));
 	int nbrGroupe = 0;
 
 	for(int agent = 0 ; agent < nbrAgent; ++agent){

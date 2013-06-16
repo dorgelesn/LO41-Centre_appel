@@ -1,3 +1,22 @@
+/*  File : pilotes.c
+    Authors :   Thomas Gagneret <thomas.gagneret@utbm.fr>
+                William kengne Teukam <william.kengne-teukam@utbm.fr>
+
+    This file is part of Centre d'appel.
+
+    Centre d'appel is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Centre d'appel is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Centre d'appel.  If not, see <http://www.gnu.org/licenses/> */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/shm.h>
@@ -6,6 +25,7 @@
 #include <signal.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/ipc.h>
 #include "structures.h"
 
 #define ATTENTE_MAX 200
@@ -68,9 +88,6 @@ void *fonc_pilote(void *k){
 
 /* Signal envoyé par le père */
 void SignalArretPere(int num){
-
-    //fflush(NULL);
-    //printf("Signal arret pilotes\n");
 
     for(int i = 0; i < NBR_PILOTES; ++i)
         if(pthread_cancel(pilote[i]) == -1)
@@ -149,8 +166,6 @@ int main(int argc,char* argv[]){
     /* On attend la fin des pilotes */
     for(int i = 0; i < NBR_PILOTES; ++i)
         pthread_join(pilote[i],NULL);
-
-    printf("Arret pilotes !!");
 
     return EXIT_SUCCESS;
     

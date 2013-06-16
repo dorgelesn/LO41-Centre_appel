@@ -1,3 +1,22 @@
+/*  File : main.c
+    Authors :   Thomas Gagneret <thomas.gagneret@utbm.fr>
+                William kengne Teukam <william.kengne-teukam@utbm.fr>
+
+    This file is part of Centre d'appel.
+
+    Centre d'appel is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Centre d'appel is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Centre d'appel.  If not, see <http://www.gnu.org/licenses/> */
+
 #ifndef CENTRE_APPEL
 #define CENTRE_APPEL
 
@@ -29,48 +48,23 @@ int MemoirePartagee;
 /* PID des 2 processus fils */
 pid_fils* pid;
 
-/* On tue les processus fils pour finir le programme (et ainsi nettoyer les IPC) */
+
+/* On tue les processus fils pour finir le programme (et ainsi nettoyer le systeme) */
 void SignalArret(int num){
 
     kill(pid->pidPilotes, SIGINT);
+    waitpid(pid->pidPilotes,NULL,0);
     kill(pid->pidGroupes, SIGINT);
 
-    //waitpid(pid->pidPilotes,NULL,0);
-    //waitpid(pid->pidGroupes,NULL,0);
-
-    /* On detache la memoire partage */
-    /*if(shmctl(MemoirePartagee, IPC_RMID, NULL) == -1)
-        perror("Erreur lors du detachement de la memoire partagee\n");*/
-
-    /* On supprime les files d'attentes */
-    //cleanQueue(FilesAttentes,NBR_PILOTES);
-
-    /* On libere la memoire */
-    /*if(FilesAttentes != NULL){
-        free(FilesAttentes);
-        FilesAttentes = NULL;
-    }*/
-
-    /*if(pid != NULL){
-        free(pid);
-        pid = NULL;
-    }*/
-
-
-    //signal(SIGINT, SIG_DFL);
-   // raise(SIGINT);
-
-    //printf("test\n");
 }
 
 /* Parametre (facultatif) : 
     nombre de pilotes souhaités
-    nombre d'agents souhaités */
+    nombre d'agents souhaités (indisponible) */
 int main(int argc, char* argv[]){
 
-    //printf("%d\n",createQueue(5, 10));
-
     struct sigaction action;
+
 
     if(argc == 1){
         NBR_PILOTES = NBR_DEFAULT;
@@ -80,14 +74,13 @@ int main(int argc, char* argv[]){
         NBR_PILOTES = atoi(argv[1]);
         NBR_AGENTS = NBR_PILOTES;
     }
-    else if(argc == 3 && atoi(argv[1]) > 1 && atoi(argv[2]) > 1 && atoi(argv[1]) <= atoi(argv[2])){
+    /*else if(argc == 3 && atoi(argv[1]) > 1 && atoi(argv[2]) > 1 && atoi(argv[1]) <= atoi(argv[2])){
         NBR_PILOTES = atoi(argv[1]);
         NBR_AGENTS = atoi(argv[2]);
-
-
-    }
+    }*/
     else{
-        printf("Utilisation : \nArgument 1 (optionnel) : Nombre de pilote ( > 1 )\nArgument 2 (optionnel) : Nombre d'agents ( > 1 )\n");
+        printf("Utilisation : \nArgument 1 (optionnel) : Nombre de pilote ( > 1 )\n");
+        /* printf("Argument 2 (optionnel) : Nombre d'agents ( > 1 )\n"); //INDISPO*/
         fprintf(stderr, "Impossible de lancer le main\n");
         return EXIT_FAILURE;
     }
@@ -107,6 +100,7 @@ int main(int argc, char* argv[]){
     FilesAttentes = malloc(NBR_PILOTES * sizeof(int));
     if(FilesAttentes == NULL){
         perror("Echec lors l'allocation memoire file d'attente");
+        exit(1);
     } 
 
     /* Tubes pour recuperer le PID des execl */
@@ -143,7 +137,7 @@ int main(int argc, char* argv[]){
 
     /* On verifie que la file d'attente est bien partagée */
     if (FilesAttentes == (int *)(0)) {
-       perror("shmat");
+       perror("Memoire partagee files attente");
        exit(1);
     }
     
@@ -157,6 +151,7 @@ int main(int argc, char* argv[]){
 
     if (createQueue(FilesAttentes, NBR_PILOTES) == -1){
         perror("Errer creation");
+        exit(1);
     }
 
 
@@ -165,6 +160,7 @@ int main(int argc, char* argv[]){
 
         case -1 : {
             perror("Erreur Création fork()");
+            exit(1);
             break;
         }
         /* Fils : Création des groupes  */
@@ -183,7 +179,7 @@ int main(int argc, char* argv[]){
                     /* On lance les groupes et on envoie en parametre :
                         le nombre de file d'attente
                         le segment de memoire partagee 
-                        le tube pour envoyer le pid
+                        le tube pour recuperer le pid
                         le nombre d'agents souhaités */
                     if (execl("./groupes","groupes", NbrPilotes, Memoire, TGroupe, NbrAgents, NULL) == -1){
                         perror("L'ouverture des groupes a échoué");
@@ -197,9 +193,9 @@ int main(int argc, char* argv[]){
 
                     /* On reucpere le pid du fils */
                     close(groupesTube[1]);
-                    //read(groupesTube[0], &pidGroupes, sizeof(pidGroupes));
                     read(groupesTube[0], &(pid->pidGroupes), sizeof(pid_t));
                     close(groupesTube[0]);
+                    exit(1);
 
                     break;
 
@@ -228,10 +224,9 @@ int main(int argc, char* argv[]){
                 /* On lance les groupes et on envoie en parametre :
                     le nombre de pilote
                     le segment de memoire partagee 
-                    le tube pour envoyer le pid */
+                    le tube pour recuperer le pid */
                     if (execl("./pilotes","pilotes", NbrPilotes, Memoire, TPilote, NULL) == -1){
-                        perror("L'ouverture des pilotes a échoué");
-                        exit(1);    
+                        perror("L'ouverture des pilotes a échoué");  
                     }
                     printf("Recouvrement pilote\n");
 
@@ -243,9 +238,8 @@ int main(int argc, char* argv[]){
 
                     /* On recupere le pid du fils */
                     close(pilotesTube[1]);
-                    //read(pilotesTube[0], &pidPilotes, sizeof(pidPilotes));
                     read(pilotesTube[0], &(pid->pidPilotes), sizeof(pid_t));
-                    close(pilotesTube[0]);               
+                    close(pilotesTube[0]);
 
                     break;
 
@@ -261,10 +255,9 @@ int main(int argc, char* argv[]){
     sigemptyset(&action.sa_mask);
     sigaction(SIGINT,&action,NULL);
 
+    /* On attend la fin des fils pour terminer */
     waitpid(pid->pidPilotes,NULL,0);
     waitpid(pid->pidGroupes,NULL,0);
-
-    printf("PID pilotes %d et groupes %d\n", pid->pidPilotes, pid->pidGroupes);
 
     /* On a recuperé les PID, plus besoin de la memoire partagée */
     shmctl(MemoirePID, IPC_RMID, NULL);
@@ -274,19 +267,6 @@ int main(int argc, char* argv[]){
         perror("Erreur lors du detachement de la memoire partagee\n");
 
     cleanQueue(FilesAttentes,NBR_PILOTES);
-
-    printf("Fin du processus centre d'appel\n");
-
-        /* On libere la memoire */
-    /*if(FilesAttentes != NULL){
-        free(FilesAttentes);
-        FilesAttentes = NULL;
-    }*/
-
-    /*if(pid != NULL){
-        free(pid);
-        pid = NULL;
-    }*/
 
     /* On libere la memoire */
     /*if(FilesAttentes != NULL){
@@ -299,11 +279,7 @@ int main(int argc, char* argv[]){
         pid = NULL;
     }*/
 
-    /* On attend qu'il n'y ait plus de fils */
-
-    /* Au cas ou */
-    //raise(SIGINT);
-    //printf("Fermeture du centre d'appel\n");
+    printf("Fin du processus centre d'appel\n");
 
     return EXIT_SUCCESS;
 }

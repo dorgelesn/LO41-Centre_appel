@@ -1,3 +1,22 @@
+/*  File : groupes.c
+    Authors :   Thomas Gagneret <thomas.gagneret@utbm.fr>
+                William kengne Teukam <william.kengne-teukam@utbm.fr>
+
+    This file is part of Centre d'appel.
+
+    Centre d'appel is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Centre d'appel is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Centre d'appel.  If not, see <http://www.gnu.org/licenses/> */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/shm.h>
@@ -89,8 +108,6 @@ void *fonc_agent(void *k){
     }
 
 
-
-
 }
 
 void *fonc_groupe(void *k){
@@ -132,19 +149,7 @@ void *fonc_groupe(void *k){
                     pthread_mutex_lock(&tableau_assignation);
                     pthread_mutex_unlock(&agentSortant[numeroGroupe]);
             }
-            /*else{
-                pthread_mutex_unlock(&tableau_assignation);
-            }*/
-
-
-
-            /* On regarde dans les agents l'ayant pour groupe principal */
-            //pthread_mutex_lock(&tableau_assignation);
-            /*do{
-
-                agt++;
-
-            }while(agt < nbrAgentGroupe && agents_dispo[numeroGroupe] != NULL && etat_agents[agents_dispo[numeroGroupe][agt]] != DISPONIBLE);*/
+            
             while(agt < nbrAgentGroupe - 1 && agents_dispo[numeroGroupe] != NULL && etat_agents[agents_dispo[numeroGroupe][agt]] != DISPONIBLE)
                 agt++;
 
@@ -157,21 +162,17 @@ void *fonc_groupe(void *k){
                     etat_agents[agentChoisi] = OCCUPE;
                     pthread_mutex_lock(&mutex_agents[agentChoisi]);
                     pthread_cond_signal(&condition[agentChoisi]);
-                    printf("File d'attente %d : Client %d assigné à l'agent %d\n",numeroGroupe,reponse.numero_client, agentChoisi);
+                    printf("File d'attente %d : Client %d assigné à l'agent %d\n",numeroGroupe, reponse.numero_client, agentChoisi);
                     pthread_mutex_unlock(&mutex_agents[agentChoisi]);
                     nonSortie = false;
                 }
              }
+
             /* On regarde dans les agents l'ayant pour groupe de debordement si pas trouve dans les agents l'ayant en groupe principal*/
             if(nonSortie){
 
                 agt = 0;
 
-                /*do{
-
-                    agt++;
-
-                }while(agt < nbrAgentGroupeRecouvrement && agents_recouvrement[numeroGroupe] != NULL && etat_agents[agents_recouvrement[numeroGroupe][agt]] != DISPONIBLE);*/
                 while(agt < nbrAgentGroupeRecouvrement - 1 && agents_recouvrement[numeroGroupe] != NULL && etat_agents[agents_recouvrement[numeroGroupe][agt]] != DISPONIBLE)
                     agt++;
 
@@ -195,6 +196,8 @@ void *fonc_groupe(void *k){
 
             agt = 0;
         }
+
+        /* On a a assigné un agent au message on attend un nouveau message */
 
         nonSortie = 1;
 
@@ -224,6 +227,7 @@ void SignalArretPere(int num){
         free(agent);
         agent = NULL;
     }
+
     void *addr;
     addr = shmat(MemoirePartagee,NULL,0);
 
@@ -269,6 +273,11 @@ void SignalArretPere(int num){
     if(mutex_agents != NULL){
         free(mutex_agents);
         mutex_agents = NULL;
+    }
+
+    if(agentSortant != NULL){
+        free(agentSortant);
+        agentSortant = NULL;
     }
 
 
@@ -353,7 +362,7 @@ int main(int argc,char* argv[]){
     agent = (pthread_cond_t*) malloc(NBR_AGENTS * sizeof(pthread_cond_t)); // Nombre d'agents (thread)
     if(agent == NULL)
         fprintf(stderr,"Erreur lors de l'allocation des agents");
-    etat_agents = (int*) malloc(NBR_AGENTS * sizeof(pthread_cond_t)); // Etat des agents
+    etat_agents = (int*) malloc(NBR_AGENTS * sizeof(int)); // Etat des agents
     if(etat_agents == NULL)
         fprintf(stderr,"Erreur lors de l'allocation de l'etat des agents");
     agentReady = (pthread_mutex_t*) malloc(NBR_GROUPES * sizeof(pthread_cond_t)); // Signal envoyé par l'agent à un groupe pour signaler qu'il est disponible
@@ -413,23 +422,29 @@ int main(int argc,char* argv[]){
     /* On recupere la memoire partagee */
     FilesAttente = shmat(MemoirePartagee, NULL, SHM_RDONLY);
 
-
-        //fflush(NULL);
-    printf("Initialisation mutex\n");
-
     for(int i = 0; i < NBR_AGENTS; ++i){
         pthread_mutex_init(&mutex_agents[i], NULL);
         pthread_mutex_unlock(&mutex_agents[i]);
     }
 
+    pthread_cond_init(condition, NULL);
+
     for(int i = 0; i < NBR_GROUPES; ++i){
         pthread_mutex_init(&agentSortant[i], NULL);
         pthread_mutex_unlock(&agentSortant[i]);
+        //agentReady[i] = PTHREAD_COND_INITIALIZER;
     }
+
+    pthread_cond_init(agentReady, NULL);
+
+    pthread_mutex_init(&tableau_assignation, NULL);
+    pthread_mutex_unlock(&tableau_assignation);
+
 
 
         //fflush(NULL);
     printf("Initialisation groupes\n");
+
 
     /* On crée les groupes */
     for(int i = 0; i < NBR_GROUPES; ++i){
@@ -439,15 +454,11 @@ int main(int argc,char* argv[]){
 
     //fflush(NULL);
     printf("Initialisation agents\n");
-
     /* On créé les agents */
     for(int i = 0; i < NBR_AGENTS; ++i){
         if (pthread_create(&agent[i], 0, fonc_agent, (void *) i) == -1)
             perror("Erreur création thread groupe");
     }
-
-    /* On envoie le signal au groupe que les agents sont prets */
-    printf("Debut attente\n");
 
     /* On attend la fin des agents */
     for(int i = 0; i < NBR_AGENTS; ++i){
@@ -455,15 +466,12 @@ int main(int argc,char* argv[]){
             perror("Erreur attente thread");
     }
 
-    printf("Fin agents\n");
 
     /* On attend la fin des groupes */
     for(int i = 0; i < NBR_GROUPES; ++i){
         if(pthread_join(groupe[i],NULL) == 0)
             perror("Erreur attente groupe");
     }
-
-    printf("Arret groupes !!");
 
     return EXIT_SUCCESS;
             
